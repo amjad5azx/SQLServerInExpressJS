@@ -102,10 +102,10 @@ app.get('/users/:id', (req, res) => {
 
 //Project Post
 app.post('/signup', (req, res) => {
-    const { nametxt, usernametxt, passtxt, phonetxt, dtext, citytxt, addresstxt, nomineetxt } = req.body;
+    const { nametxt, usernametxt, passtxt, phonetxt, dtext, citytxt, addresstxt, nomineetxt,selected_policy } = req.body;
   
     // Data validation
-    if (!nametxt || !usernametxt || !passtxt || !phonetxt || !dtext || !citytxt || !addresstxt || !nomineetxt) {
+    if (!nametxt || !usernametxt || !passtxt || !phonetxt || !dtext || !citytxt || !addresstxt || !nomineetxt||!selected_policy) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
   
@@ -124,21 +124,24 @@ app.post('/signup', (req, res) => {
           con.close();
           return res.status(500).json({ error: 'Error checking existing username' });
         }
-  
-        if (result && result.length > 0) {
+        console.log(result.recordset[0]==undefined)
+        // console.log(usernametxt==result.recordset[0].username)
+        // console.log(result.recordset[0].username);
+        if (result.recordset[0]!=undefined) {
           con.close();
-          return res.status(400).json({ error: 'Username already exists' });
+          console.log("User exists")
+          return res.send("User exists")
         }
   
         // Execute SQL queries
-        con.query(`INSERT INTO user_details (name, username, password, phone, dob) VALUES ('${nametxt}', '${usernametxt}', '${passtxt}', '${phonetxt}', '${dtext}')`, (err, result) => {
+        con.query(`INSERT INTO user_details (name, username, password, phone_no, dob) VALUES ('${nametxt}', '${usernametxt}', '${passtxt}', '${phonetxt}', '${dtext}')`, (err, result) => {
           if (err) {
             console.log(err);
             con.close();
             return res.status(500).json({ error: 'Error inserting user details' });
           }
   
-          con.query(`INSERT INTO address_details (address, city) VALUES ('${addresstxt}', '${citytxt}')`, (err, result) => {
+          con.query(`INSERT INTO address_details (home_address, city) VALUES ('${addresstxt}', '${citytxt}')`, (err, result) => {
             if (err) {
               console.log(err);
               con.close();
@@ -158,8 +161,9 @@ app.post('/signup', (req, res) => {
                   con.close();
                   return res.status(500).json({ error: 'Error retrieving max nominee ID' });
                 }
-  
-                const nomid = result[0].max_nominee_id;
+                console.log(result)
+                const nomid = result.recordset[0].max_nominee_id
+                console.log(nomid)
   
                 con.query('SELECT MAX(address_id) AS max_address_id FROM address_details', (err, result) => {
                   if (err) {
@@ -168,7 +172,7 @@ app.post('/signup', (req, res) => {
                     return res.status(500).json({ error: 'Error retrieving max address ID' });
                   }
   
-                  const addit = result[0].max_address_id;
+                  const addit = result.recordset[0].max_address_id;
   
                   con.query('SELECT MAX(user_id) AS max_user_id FROM user_details', (err, result) => {
                     if (err) {
@@ -177,9 +181,9 @@ app.post('/signup', (req, res) => {
                       return res.status(500).json({ error: 'Error retrieving max user ID' });
                     }
   
-                    const uid = result[0].max_user_id;
+                    const uid = result.recordset[0].max_user_id;
   
-                    const addingIdsQuery = `INSERT INTO user_details (nominee_id, address_id, user_id) VALUES (${nomid}, ${addit}, ${uid})`;
+                    const addingIdsQuery = `Update user_details set nominee_id=${nomid},address_id=${addit} where  user_id=${uid}`
                     con.query(addingIdsQuery, (err, result) => {
                       if (err) {
                         console.log(err);
@@ -188,7 +192,7 @@ app.post('/signup', (req, res) => {
                       }
   
                       const dt = new Date().toISOString().split('T')[0];
-                      const policyTypeQuery = `SELECT policy_type_code FROM ref_policy_types WHERE policy_type_name = '${DropDownList1.SelectedValue}'`;
+                      const policyTypeQuery = `SELECT policy_type_code FROM ref_policy_types WHERE policy_type_name = '${selected_policy}'`;
                       con.query(policyTypeQuery, (err, result) => {
                         if (err) {
                           console.log(err);
@@ -196,8 +200,8 @@ app.post('/signup', (req, res) => {
                           return res.status(500).json({ error: 'Error retrieving policy type code' });
                         }
   
-                        const policyCode = result[0].policy_type_code;
-                        const userPolicyQuery = `INSERT INTO User_Policy (user_id, nominee_id, date, policy_code, status) VALUES (${uid}, ${nomid}, '${dt}', '${policyCode}', 'Inactive')`;
+                        const policyCode = result.recordset[0].policy_type_code;
+                        const userPolicyQuery = `INSERT INTO user_policies (user_id, nominee_id, date_registered, policy_type_id, policy_status) VALUES (${uid}, ${nomid}, '${dt}', '${policyCode}', 'Inactive')`;
                         con.query(userPolicyQuery, (err, result) => {
                           if (err) {
                             console.log(err);
@@ -209,7 +213,7 @@ app.post('/signup', (req, res) => {
                           con.close();
   
                           // Redirect the user or send a response
-                          return res.redirect('Home.aspx');
+                          return res.send('done');
                         });
                       });
                     });
