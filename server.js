@@ -38,7 +38,7 @@ app.get('/users', (req, res) => {
       res.status(500).send('Database connection error');
     } else {
       const request = new sql.Request();
-      request.query('select * from Users', (err, recordset) => {
+      request.query('select * from user_details', (err, recordset) => {
         if (err) {
           console.log(err);
           res.status(500).send('Error retrieving users from database');
