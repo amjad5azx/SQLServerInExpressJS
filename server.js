@@ -9,26 +9,26 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 
 // Database configuration
-const dbConfig = {
-  user: 'Amjad',
-  password: 'Amjad@123',
-  server: 'mssql-130004-0.cloudclusters.net',
-  port:19856,
-  database: 'Insurance',
-  options: {
-    trustServerCertificate: true
-  }
-};
-
 // const dbConfig = {
-//     user: 'sa',
-//     password: 'amjad',
-//     server: 'DESKTOP-27TFO05',
-//     database: 'Insurance',
-//     options: {
-//       trustServerCertificate: true
-//     }
-//   };
+//   user: 'Amjad',
+//   password: 'Amjad@123',
+//   server: 'mssql-130004-0.cloudclusters.net',
+//   port:19856,
+//   database: 'Insurance',
+//   options: {
+//     trustServerCertificate: true
+//   }
+// };
+
+const dbConfig = {
+    user: 'sa',
+    password: 'amjad',
+    server: 'DESKTOP-27TFO05',
+    database: 'Insurance',
+    options: {
+      trustServerCertificate: true
+    }
+  };
 
 // For Practice only
 app.get('/users', (req, res) => {
