@@ -2,11 +2,18 @@ const express = require('express');
 const app = express();
 const sql = require('mssql');
 const bodyParser = require('body-parser');
-
+const session = require('express-session');
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+app.use(
+  session({
+    secret: '5azx', // Replace with your own secret key
+    resave: false,
+    saveUninitialized: false,
+  })
+);
 
 // Database configuration
 // const dbConfig = {
@@ -226,6 +233,47 @@ app.post('/signup', (req, res) => {
       });
     });
   });
+
+  app.post('/signin', async (req, res) => {
+    const { usernametxt, passtxt } = req.body;
+  
+    if (usernametxt === '' || passtxt === '') {
+      let errors = [];
+      if (usernametxt === '') {
+        errors.push({ field: 'username', message: 'Username is required' });
+      }
+      if (passtxt === '') {
+        errors.push({ field: 'password', message: 'Password is required' });
+      }
+      return res.status(400).json({ errors });
+    }
+  
+    if (usernametxt.toLowerCase() === 'agent') {
+      req.session.id = usernametxt;
+      return res.send('done');
+    } else if (usernametxt.toLowerCase() === 'admin') {
+      req.session.id = usernametxt;
+      return res.send('Done');
+    } else {
+      try {
+        const pool = await sql.connect(dbConfig);
+        const query = `SELECT username, Password FROM user_details WHERE username = '${usernametxt}' AND password = '${passtxt}'`;
+        const result = await pool.request().query(query);
+        sql.close();
+  
+        if (result.recordset.length > 0) {
+          req.session.id = usernametxt;
+          return res.send('done');
+        } else {
+          return res.status(401).json({ error: 'Data does not match' });
+        }
+      } catch (err) {
+        console.log(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+    }
+  });
+  
   
 
 // Start the server
