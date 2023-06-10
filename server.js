@@ -3,8 +3,10 @@ const app = express();
 const sql = require('mssql');
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const cors = require('cors');
 
 app.use(bodyParser.json());
+app.use(cors())
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(
@@ -137,7 +139,7 @@ app.post('/signup', (req, res) => {
         if (result.recordset[0]!=undefined) {
           con.close();
           console.log("User exists")
-          return res.send("User exists")
+          return res.json({ message: 'User exists' });
         }
   
         // Execute SQL queries
@@ -220,7 +222,8 @@ app.post('/signup', (req, res) => {
                           con.close();
   
                           // Redirect the user or send a response
-                          return res.send('done');
+                          return res.json({ message: 'done' });
+
                         });
                       });
                     });
@@ -251,10 +254,10 @@ app.post('/signup', (req, res) => {
   
     if (usernametxt.toLowerCase() === 'agent') {
       req.session.id = usernametxt;
-      return res.send('done');
+      return res.json({ message: 'agent' });
     } else if (usernametxt.toLowerCase() === 'admin') {
       req.session.id = usernametxt;
-      return res.send('Done');
+      return res.json({ message: 'admin' });
     } else {
       try {
         const pool = await sql.connect(dbConfig);
@@ -264,7 +267,7 @@ app.post('/signup', (req, res) => {
   
         if (result.recordset.length > 0) {
           req.session.id = usernametxt;
-          return res.redirect("/profile")
+          return res.json({ message: 'done' });
           // return res.send('done');
         } else {
           return res.status(401).json({ error: 'Data does not match' });
