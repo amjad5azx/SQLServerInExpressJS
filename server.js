@@ -785,7 +785,15 @@ app.post('/checkDetails', async (req, res) => {
   }
 });
 
-
+//changing g=here
+app.get('/check-session', (req, res) => {
+  console.log(req.session.id+"\nsession: "+req.session);
+  if (req.session.id==="admin") {
+    res.json({ sessionValid: true });
+  } else {
+    res.json({ sessionValid: false });
+  }
+});
 
 
 
