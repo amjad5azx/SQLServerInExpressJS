@@ -731,15 +731,17 @@ app.put('/approve-policy', async (req, res) => {
 });
 
 //Check Details
-app.get('/checkDetails', async (req, res) => {
+app.post('/checkDetails', async (req, res) => {
   const usertxt = req.body.usertxt;
 
   try {
+    console.log(usertxt);
     const pool = await sql.connect(dbConfig);
     const getData = `select user_id from user_details where username='${usertxt}'`;
     const resultUserId = await pool.request().query(getData);
 
-    if (resultUserId.recordset.length > 0) {
+    if (resultUserId.recordset[0]!==undefined) {
+      console.log("User");
       const uid = resultUserId.recordset[0].user_id;
       let pol_name = `select ref_policy_types.policy_type_name from user_details inner join user_policies on user_details.user_id=user_policies.user_id inner join ref_policy_types on ref_policy_types.policy_type_code=user_policies.policy_type_id where user_details.username='${usertxt}'`;
       let pre_amount = `select premium_amount from user_details where username='${usertxt}'`;
@@ -759,9 +761,11 @@ app.get('/checkDetails', async (req, res) => {
       } else {
         const pay = `select sum(policy_payments.amount) as paid_amount from policy_payments inner join user_details on policy_payments.user_id=user_details.user_id where policy_payments.user_id=${uid}`;
         const res_pay_result = await pool.request().query(pay);
-        res_pay = res_pay_result.recordset[0].paid_amount;
+        if(res_pay==="")
+        res_pay = "0";
       }
 
+      
       const policyDetails = {
         'Policy Name': res_pol_name.recordset[0].policy_type_name,
         'Policy Status': res_stat.recordset[0].policy_status,
@@ -771,7 +775,8 @@ app.get('/checkDetails', async (req, res) => {
       };
 
       return res.json(policyDetails);
-    } else {
+    } else if (resultUserId.recordset[0]===undefined) {
+      console.log('No user');
       return res.json({ message: 'No User exists' });
     }
   } catch (error) {
