@@ -253,10 +253,10 @@ app.post('/signup', (req, res) => {
     }
   
     if (usernametxt.toLowerCase() === 'agent') {
-      req.session.id = usernametxt;
+      req.session.username = usernametxt;
       return res.json({ message: 'agent' });
     } else if (usernametxt.toLowerCase() === 'admin') {
-      req.session.id = usernametxt;
+      req.session.username = usernametxt;
       return res.json({ message: 'admin' });
     } else {
       try {
@@ -266,7 +266,7 @@ app.post('/signup', (req, res) => {
         sql.close();
   
         if (result.recordset.length > 0) {
-          req.session.id = usernametxt;
+          req.session.username = usernametxt;
           return res.json({ message: 'done' });
           // return res.send('done');
         } else {
@@ -303,16 +303,16 @@ app.post('/sign-out', async (req, res) => {
   
 //Profile 
 app.get('/profile', async (req, res) => {
-  if (!req.session.id) {
+  if (!req.session.username) {
     return res.redirect('/login');
   } else {
     try {
-      const nametxt = `SELECT name FROM user_details WHERE username='${req.session.id}'`;
-      const addtxt = `SELECT address_details.home_address FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.id}'`;
-      const nomtxt = `SELECT Nominee_Detail.nominee_name FROM Nominee_Detail INNER JOIN user_details ON Nominee_Detail.nominee_id=user_details.nominee_id WHERE user_details.username='${req.session.id}'`;
-      const phonetxt = `SELECT phone_no FROM user_details WHERE username='${req.session.id}'`;
-      const _password = `SELECT password FROM user_details WHERE username='${req.session.id}'`;
-      const city_name = `SELECT address_details.city FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.id}'`;
+      const nametxt = `SELECT name FROM user_details WHERE username='${req.session.username}'`;
+      const addtxt = `SELECT address_details.home_address FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.username}'`;
+      const nomtxt = `SELECT Nominee_Detail.nominee_name FROM Nominee_Detail INNER JOIN user_details ON Nominee_Detail.nominee_id=user_details.nominee_id WHERE user_details.username='${req.session.username}'`;
+      const phonetxt = `SELECT phone_no FROM user_details WHERE username='${req.session.username}'`;
+      const _password = `SELECT password FROM user_details WHERE username='${req.session.username}'`;
+      const city_name = `SELECT address_details.city FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.username}'`;
 
       const connection = await sql.connect(dbConfig);
       const [nameResult, addressResult, nomineeResult, phoneResult, passwordResult, cityResult] = await Promise.all([
@@ -348,7 +348,7 @@ app.put('/update-phone', (req, res) => {
     return res.status(400).json({ error: 'Phone number is required' });
   }
 
-  const updateQuery = `UPDATE user_details SET phone_no = '${phone}' WHERE username = '${req.session.id}'`;
+  const updateQuery = `UPDATE user_details SET phone_no = '${phone}' WHERE username = '${req.session.username}'`;
 
   sql.connect(dbConfig)
     .then((pool) => pool.request().query(updateQuery))
@@ -373,7 +373,7 @@ app.put('/update-name', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const updateQuery = `UPDATE user_details SET name = '${name}' WHERE username = '${req.session.id}'`;
+    const updateQuery = `UPDATE user_details SET name = '${name}' WHERE username = '${req.session.username}'`;
     await pool.request().query(updateQuery);
 
     sql.close();
@@ -397,7 +397,7 @@ app.put('/update-password', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const updateQuery = `UPDATE user_details SET password = '${password}' WHERE username = '${req.session.id}'`;
+    const updateQuery = `UPDATE user_details SET password = '${password}' WHERE username = '${req.session.username}'`;
     await pool.request().query(updateQuery);
 
     sql.close();
@@ -421,7 +421,7 @@ app.put('/update-city', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.id}'`;
+    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
     const result = await pool.request().query(getUserIdQuery);
     const addressId = result.recordset[0].address_id;
 
@@ -449,7 +449,7 @@ app.put('/update-address', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.id}'`;
+    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
     const result = await pool.request().query(getUserIdQuery);
     const addressId = result.recordset[0].address_id;
 
@@ -477,7 +477,7 @@ app.put('/update-address', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.id}'`;
+    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
     const result = await pool.request().query(getUserIdQuery);
     const addressId = result.recordset[0].address_id;
 
@@ -497,16 +497,16 @@ app.put('/update-address', async (req, res) => {
 //Premium page
 app.get('/premium-profile', async (req, res) => {
   try {
-    if (!req.session.id) {
+    if (!req.session.username) {
       return res.redirect('Login.aspx');
     }
 
-    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${req.session.id}'`;
-    const polNameQuery = `SELECT ref_policy_types.policy_type_name FROM user_details INNER JOIN user_policies ON user_details.user_id = user_policies.user_id INNER JOIN ref_policy_types ON ref_policy_types.policy_type_code = user_policies.policy_type_id WHERE user_details.username = '${req.session.id}'`;
-    const preAmountQuery = `SELECT premium_amount FROM user_details WHERE username = '${req.session.id}'`;
-    const sumQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${req.session.id}'`;
-    const statQuery = `SELECT user_policies.policy_status FROM user_policies INNER JOIN user_details ON user_details.user_id = user_policies.user_id WHERE user_details.username = '${req.session.id}'`;
-    const paymentsQuery = `SELECT SUM(policy_payments.amount) FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = (SELECT user_id FROM user_details WHERE username = '${req.session.id}')`;
+    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${req.session.username}'`;
+    const polNameQuery = `SELECT ref_policy_types.policy_type_name FROM user_details INNER JOIN user_policies ON user_details.user_id = user_policies.user_id INNER JOIN ref_policy_types ON ref_policy_types.policy_type_code = user_policies.policy_type_id WHERE user_details.username = '${req.session.username}'`;
+    const preAmountQuery = `SELECT premium_amount FROM user_details WHERE username = '${req.session.username}'`;
+    const sumQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${req.session.username}'`;
+    const statQuery = `SELECT user_policies.policy_status FROM user_policies INNER JOIN user_details ON user_details.user_id = user_policies.user_id WHERE user_details.username = '${req.session.username}'`;
+    const paymentsQuery = `SELECT SUM(policy_payments.amount) FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = (SELECT user_id FROM user_details WHERE username = '${req.session.username}')`;
 
     const pool = await sql.connect(dbConfig);
 
@@ -572,7 +572,7 @@ app.get('/premium-profile', async (req, res) => {
 //Paying premium
 app.put('/process-payment', async (req, res) => {
   try {
-    const getUserIdQuery = `SELECT user_id, premium_amount FROM user_details WHERE username = '${req.session.id}'`;
+    const getUserIdQuery = `SELECT user_id, premium_amount FROM user_details WHERE username = '${req.session.username}'`;
 
     const pool = await sql.connect(dbConfig);
 
@@ -605,10 +605,10 @@ app.put('/process-payment', async (req, res) => {
 //Claiming policy
 app.put('/claim-policy', async (req, res) => {
   try {
-    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${req.session.id}'`;
-    const nomidQuery = `SELECT nominee_id FROM user_details WHERE username = '${req.session.id}'`;
-    const sumAssuredQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${req.session.id}'`;
-    const payQuery = `SELECT SUM(policy_payments.amount) FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = (SELECT user_id FROM user_details WHERE username = '${req.session.id}')`;
+    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${req.session.username}'`;
+    const nomidQuery = `SELECT nominee_id FROM user_details WHERE username = '${req.session.username}'`;
+    const sumAssuredQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${req.session.username}'`;
+    const payQuery = `SELECT SUM(policy_payments.amount) FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = (SELECT user_id FROM user_details WHERE username = '${req.session.username}')`;
 
     const pool = await sql.connect(dbConfig);
 
@@ -624,7 +624,7 @@ app.put('/claim-policy', async (req, res) => {
     const payResult = await pool.request().query(payQuery);
     const _pay = payResult.recordset[0][''];
 
-    const claimQuery = `EXEC Claiming_Policy ${uid}, ${nomid}, '${req.session.id}', ${_pay}`;
+    const claimQuery = `EXEC Claiming_Policy ${uid}, ${nomid}, '${req.session.username}', ${_pay}`;
     const updateQuery = `UPDATE user_policies SET policy_status = 'Claimed' WHERE user_id = ${uid}`;
 
     await pool.request().query(updateQuery);
@@ -787,8 +787,8 @@ app.post('/checkDetails', async (req, res) => {
 
 //changing g=here
 app.get('/check-session', (req, res) => {
-  console.log(req.session.id+"\nsession: "+req.session);
-  if (req.session.id==="admin") {
+  console.log(req.session.username+"\nsession: "+req.session);
+  if (req.session.username) {
     res.json({ sessionValid: true });
   } else {
     res.json({ sessionValid: false });
