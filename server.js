@@ -730,6 +730,57 @@ app.put('/approve-policy', async (req, res) => {
   }
 });
 
+//Check Details
+app.get('/checkDetails', async (req, res) => {
+  const usertxt = req.body.usertxt;
+
+  try {
+    const pool = await sql.connect(dbConfig);
+    const getData = `select user_id from user_details where username='${usertxt}'`;
+    const resultUserId = await pool.request().query(getData);
+
+    if (resultUserId.recordset.length > 0) {
+      const uid = resultUserId.recordset[0].user_id;
+      let pol_name = `select ref_policy_types.policy_type_name from user_details inner join user_policies on user_details.user_id=user_policies.user_id inner join ref_policy_types on ref_policy_types.policy_type_code=user_policies.policy_type_id where user_details.username='${usertxt}'`;
+      let pre_amount = `select premium_amount from user_details where username='${usertxt}'`;
+      let sum = `select Sum_Assured from user_details where username='${usertxt}'`;
+      let stat = `select user_policies.policy_status from user_policies inner join user_details on user_details.user_id=user_policies.user_id where user_details.username='${usertxt}'`;
+
+      const res_pol_name = await pool.request().query(pol_name);
+      const res_pre_amount = await pool.request().query(pre_amount);
+      const res_sum = await pool.request().query(sum);
+      const res_stat = await pool.request().query(stat);
+
+      let res_pay = '';
+      if (res_stat.recordset[0].policy_status === 'Inactive') {
+        res_sum.recordset[0].Sum_Assured = 'Waiting for Policy Approval';
+        res_pre_amount.recordset[0].premium_amount = 'Waiting for Policy Approval';
+        res_pay = 'Waiting for Policy Approval';
+      } else {
+        const pay = `select sum(policy_payments.amount) as paid_amount from policy_payments inner join user_details on policy_payments.user_id=user_details.user_id where policy_payments.user_id=${uid}`;
+        const res_pay_result = await pool.request().query(pay);
+        res_pay = res_pay_result.recordset[0].paid_amount;
+      }
+
+      const policyDetails = {
+        'Policy Name': res_pol_name.recordset[0].policy_type_name,
+        'Policy Status': res_stat.recordset[0].policy_status,
+        'Premium Amount': res_pre_amount.recordset[0].premium_amount,
+        'Sum Assured': res_sum.recordset[0].Sum_Assured,
+        'Paid Amount': res_pay
+      };
+
+      return res.json(policyDetails);
+    } else {
+      return res.json({ message: 'No User exists' });
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: 'Database error' });
+  }
+});
+
+
 
 
 
