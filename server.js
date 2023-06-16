@@ -4,11 +4,14 @@ const sql = require('mssql');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+
 
 app.use(bodyParser.json());
 app.use(cors())
 app.use(bodyParser.urlencoded({ extended: true }));
 
+app.use(cookieParser());
 app.use(
   session({
     secret: '5azx', // Replace with your own secret key
@@ -16,6 +19,14 @@ app.use(
     saveUninitialized: false,
   })
 );
+
+let checkingSession=''
+// app.use((req, res, next) => {
+//   res.locals.username = req.session.username || null;
+//   next();
+// });
+
+
 
 // Database configuration
 // const dbConfig = {
@@ -257,6 +268,9 @@ app.post('/signup', (req, res) => {
       return res.json({ message: 'agent' });
     } else if (usernametxt.toLowerCase() === 'admin') {
       req.session.username = usernametxt;
+      checkingSession=req.session.username
+    
+      console.log('Checking: '+req.session.username);
       return res.json({ message: 'admin' });
     } else {
       try {
@@ -287,6 +301,8 @@ app.post('/sign-out', async (req, res) => {
         if (err) {
           reject(err);
         } else {
+          console.log('destroyed');
+          checkingSession=''
           resolve();
         }
       });
@@ -787,14 +803,79 @@ app.post('/checkDetails', async (req, res) => {
 
 //changing g=here
 app.get('/check-session', (req, res) => {
-  console.log(req.session.username+"\nsession: "+req.session);
-  if (req.session.username) {
-    res.json({ sessionValid: true });
+  console.log("Session: "+checkingSession);
+  console.log("Session Object: "+JSON.stringify(req.session));
+
+  if (req.session) {
+    res.json({ sessionValid: true});
   } else {
     res.json({ sessionValid: false });
   }
 });
 
+//policy activation
+app.post('/activate-policy', async (req, res) => {
+  const { usertxt } = req.body;
+
+  const getUsernameQuery = `select user_details.username as username from user_details inner join user_policies on user_details.user_id=user_policies.user_id where user_policies.policy_status='Inactive' and user_details.username='${usertxt}'`;
+
+  try {
+    await sql.connect(dbConfig);
+
+    const result = await sql.query(getUsernameQuery);
+    console.log(result);
+    if(result.recordset[0]===undefined){
+      return res.json({message:"no user found"})
+    }
+    const username = result.recordset[0]['username'];
+    console.log(username);
+    if (username) {
+      const getPolicyNameQuery = `select ref_policy_types.policy_type_name as policy_name from user_details inner join user_policies on user_details.user_id=user_policies.user_id inner join ref_policy_types on user_policies.policy_type_id=ref_policy_types.policy_type_code where user_details.username='${usertxt}'`;
+
+      const policyNameResult = await sql.query(getPolicyNameQuery);
+      const policyName = policyNameResult.recordset[0]['policy_name'];
+      console.log(policyName);
+
+      const getUserIdQuery = `SELECT user_id FROM user_details WHERE username = '${username}'`;
+      const result = await sql.query(getUserIdQuery);
+    const userId = result.recordset[0]['user_id'];
+
+      if (policyName.toLowerCase() === 'life') {
+        const sumAssure = 500000;
+        const premiumAmount = 20000;
+
+        const policyActivationQuery = `UPDATE user_details SET Sum_Assured = ${sumAssure}, premium_amount = ${premiumAmount} WHERE username = '${usertxt}';
+                                       UPDATE user_policies SET policy_status = 'Active' WHERE user_id = ${userId}`;
+
+        await sql.query(policyActivationQuery);
+
+        console.log('Life policy activated');
+        return res.json({ message: 'Life policy activated' });
+      } else if (policyName.toLowerCase() === 'health') {
+        const sumAssure = 200000;
+        const premiumAmount = 10000;
+        console.log(premiumAmount);
+        const policyActivationQuery = `UPDATE user_details SET Sum_Assured = ${sumAssure}, premium_amount = ${premiumAmount} WHERE username = '${usertxt}';
+                                       UPDATE user_policies SET policy_status = 'Active' WHERE user_id = ${userId}`;
+
+        await sql.query(policyActivationQuery);
+
+        console.log('Health policy activated');
+        return res.json({ message: 'Health policy activated' });
+      } else {
+        return res.json({ message: 'Unknown policy type' });
+      }
+    } else {
+      return res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).json({ message: 'An error occurred' });
+  } finally {
+    // Close the SQL Server connection
+    sql.close();
+  }
+});
 
 
 
