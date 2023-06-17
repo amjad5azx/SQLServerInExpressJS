@@ -265,6 +265,8 @@ app.post('/signup', (req, res) => {
   
     if (usernametxt.toLowerCase() === 'agent') {
       req.session.username = usernametxt;
+      checkingSession=req.session.username
+      console.log('Checking: '+req.session.username);
       return res.json({ message: 'agent' });
     } else if (usernametxt.toLowerCase() === 'admin') {
       req.session.username = usernametxt;
@@ -281,8 +283,9 @@ app.post('/signup', (req, res) => {
   
         if (result.recordset.length > 0) {
           req.session.username = usernametxt;
-          return res.json({ message: 'done' });
-          // return res.send('done');
+          checkingSession=req.session.username
+          
+          return res.json({ message: 'user' });
         } else {
           return res.status(401).json({ error: 'Data does not match' });
         }
@@ -315,20 +318,153 @@ app.post('/sign-out', async (req, res) => {
   }
 });
 
+//Policy Detail
+app.get('/user-policy', async (req, res) => {
+  try {
+    const pool = new sql.ConnectionPool(dbConfig);
+    const connection = await pool.connect();
+    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${checkingSession}'`;
+    const uidResult = await connection.query(uidQuery);
+    const uid = uidResult.recordset[0]?.user_id;
 
-  
+    const polNameQuery = `SELECT ref_policy_types.policy_type_name FROM user_details
+      INNER JOIN user_policies ON user_details.user_id = user_policies.user_id
+      INNER JOIN ref_policy_types ON ref_policy_types.policy_type_code = user_policies.policy_type_id
+      WHERE user_details.username = '${checkingSession}'`;
+    const preAmountQuery = `SELECT premium_amount FROM user_details WHERE username = '${checkingSession}'`;
+    const sumQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${checkingSession}'`;
+    const statQuery = `SELECT user_policies.policy_status FROM user_policies
+      INNER JOIN user_details ON user_details.user_id = user_policies.user_id
+      WHERE user_details.username = '${checkingSession}'`;
+    const payQuery = `SELECT SUM(policy_payments.amount) as totalPayment FROM policy_payments
+      INNER JOIN user_details ON policy_payments.user_id = user_details.user_id
+      WHERE policy_payments.user_id = ${uid}`;
+
+    const [polNameResult, preAmountResult, sumResult, statResult, payResult] = await Promise.all([
+      connection.query(polNameQuery),
+      connection.query(preAmountQuery),
+      connection.query(sumQuery),
+      connection.query(statQuery),
+      connection.query(payQuery)
+    ]);
+
+
+    const policyName = polNameResult.recordset[0]?.policy_type_name || '';
+    const premiumAmount = preAmountResult.recordset[0]?.premium_amount || '';
+    const sumAssuredAmount = sumResult.recordset[0]?.Sum_Assured || '';
+    const policyStatus = statResult.recordset[0]?.policy_status || '';
+    const payments = payResult.recordset[0]?.totalPayment || '0';
+
+    let checkUserID;
+    for (let i = 1; i <= 2; i++) {
+      if (i === 2) {
+        const payQuery = `SELECT user_id FROM Claim_Detials WHERE user_id = ${uid}`;
+        checkUserID = await connection.query(payQuery);
+      }
+    }
+
+    const checkUID = checkUserID.recordset[0]?.user_id;
+
+    const response = {
+      policyName,
+      premiumAmount: premiumAmount || 'Wait for policy Approval',
+      sumAssuredAmount: sumAssuredAmount || 'Wait for policy Approval',
+      payments,
+      policyStatus,
+      showButton1: premiumAmount !== ''&&payments!=sumAssuredAmount,
+      showButton2: sumAssuredAmount === payments&&policyStatus==='Active',
+      showLabel3: policyStatus==='Claimed',
+    };
+    connection.release();
+    res.json(response);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+//Paying Premium
+app.post('/pay-premium', async (req, res) => {
+  try {
+    const connection = new sql.ConnectionPool(dbConfig);
+    await connection.connect();
+
+    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${checkingSession}'`;
+    const uidResult = await connection.query(uidQuery);
+    const uid = uidResult.recordset[0]?.user_id;
+
+    const pAmountQuery = `SELECT premium_amount FROM user_details WHERE username = '${checkingSession}'`;
+    const pNoQuery = `SELECT policy_no FROM user_policies WHERE user_id = ${uid}`;
+
+    const [pAmountResult, pNoResult] = await Promise.all([
+      connection.query(pAmountQuery),
+      connection.query(pNoQuery)
+    ]);
+
+    const pAmount = pAmountResult.recordset[0]?.premium_amount || 0;
+    const pNo = pNoResult.recordset[0]?.policy_no || 0;
+
+    const payQuery = `INSERT INTO policy_payments (user_id, policy_no, amount, date_of_payment)
+      VALUES (${uid}, ${pNo}, ${pAmount}, GETDATE())`;
+
+    await connection.query(payQuery);
+connection.close()
+    res.json({message:"done"})
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/claim-policy', async (req, res) => {
+  try {
+    const connection = new sql.ConnectionPool(dbConfig);
+
+    // Connect to the database
+    await connection.connect();
+
+    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${checkingSession}'`;
+    const nomIdQuery = `SELECT nominee_id FROM user_details WHERE username = '${checkingSession}'`;
+    const preAmountQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${checkingSession}'`;
+
+    const [uidResult, nomIdResult, preAmountResult] = await Promise.all([
+      connection.query(uidQuery),
+      connection.query(nomIdQuery),
+      connection.query(preAmountQuery),
+    ]);
+
+    const uid = uidResult.recordset.length > 0 ? uidResult.recordset[0].user_id : null;
+    const nomId = nomIdResult.recordset[0]?.nominee_id;
+    const preAmount = preAmountResult.recordset[0]?.Sum_Assured || 0;
+
+    const payQuery = `SELECT SUM(policy_payments.amount) AS total_paid FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = ${uid}`;
+    const payResult = await connection.query(payQuery);
+    const totalPaid = payResult.recordset[0]?.total_paid || 0;
+
+    const claimInsertQuery = `INSERT INTO Claim_Detials (user_id, nominee_id, claim_by, claim_amount) VALUES (${uid}, ${nomId}, 'amjad53azx', ${totalPaid})`;
+    const updateQuery = `UPDATE user_policies SET policy_status = 'Claimed' WHERE user_id = ${uid}`;
+
+    await connection.query(updateQuery);
+    await connection.query(claimInsertQuery);
+
+    connection.close();
+    res.json({ message: 'Policy claimed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 //Profile 
 app.get('/profile', async (req, res) => {
-  if (!req.session.username) {
-    return res.redirect('/login');
-  } else {
+  
     try {
-      const nametxt = `SELECT name FROM user_details WHERE username='${req.session.username}'`;
-      const addtxt = `SELECT address_details.home_address FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.username}'`;
-      const nomtxt = `SELECT Nominee_Detail.nominee_name FROM Nominee_Detail INNER JOIN user_details ON Nominee_Detail.nominee_id=user_details.nominee_id WHERE user_details.username='${req.session.username}'`;
-      const phonetxt = `SELECT phone_no FROM user_details WHERE username='${req.session.username}'`;
-      const _password = `SELECT password FROM user_details WHERE username='${req.session.username}'`;
-      const city_name = `SELECT address_details.city FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${req.session.username}'`;
+      const nametxt = `SELECT name FROM user_details WHERE username='${checkingSession}'`;
+      const addtxt = `SELECT address_details.home_address FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${checkingSession}'`;
+      const nomtxt = `SELECT Nominee_Detail.nominee_name FROM Nominee_Detail INNER JOIN user_details ON Nominee_Detail.nominee_id=user_details.nominee_id WHERE user_details.username='${checkingSession}'`;
+      const phonetxt = `SELECT phone_no FROM user_details WHERE username='${checkingSession}'`;
+      const _password = `SELECT password FROM user_details WHERE username='${checkingSession}'`;
+      const city_name = `SELECT address_details.city FROM address_details INNER JOIN user_details ON address_details.address_id=user_details.address_id WHERE user_details.username='${checkingSession}'`;
 
       const connection = await sql.connect(dbConfig);
       const [nameResult, addressResult, nomineeResult, phoneResult, passwordResult, cityResult] = await Promise.all([
@@ -348,12 +484,13 @@ app.get('/profile', async (req, res) => {
       const password = passwordResult.recordset[0]?.password || '';
       const city = cityResult.recordset[0]?.city || '';
 
+      console.log(city);
+
       return res.json({ name, address, nominee, phone, password, city });
     } catch (err) {
       console.log(err);
       return res.status(500).json({ error: 'Database error' });
     }
-  }
 });
 
 //Update Phone
@@ -364,7 +501,7 @@ app.put('/update-phone', (req, res) => {
     return res.status(400).json({ error: 'Phone number is required' });
   }
 
-  const updateQuery = `UPDATE user_details SET phone_no = '${phone}' WHERE username = '${req.session.username}'`;
+  const updateQuery = `UPDATE user_details SET phone_no = ${phone} WHERE username = '${checkingSession}'`;
 
   sql.connect(dbConfig)
     .then((pool) => pool.request().query(updateQuery))
@@ -389,7 +526,7 @@ app.put('/update-name', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const updateQuery = `UPDATE user_details SET name = '${name}' WHERE username = '${req.session.username}'`;
+    const updateQuery = `UPDATE user_details SET name = '${name}' WHERE username = '${checkingSession}'`;
     await pool.request().query(updateQuery);
 
     sql.close();
@@ -413,7 +550,7 @@ app.put('/update-password', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const updateQuery = `UPDATE user_details SET password = '${password}' WHERE username = '${req.session.username}'`;
+    const updateQuery = `UPDATE user_details SET password = '${password}' WHERE username = '${checkingSession}'`;
     await pool.request().query(updateQuery);
 
     sql.close();
@@ -437,7 +574,7 @@ app.put('/update-city', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
+    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${checkingSession}'`;
     const result = await pool.request().query(getUserIdQuery);
     const addressId = result.recordset[0].address_id;
 
@@ -465,7 +602,7 @@ app.put('/update-address', async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
+    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${checkingSession}'`;
     const result = await pool.request().query(getUserIdQuery);
     const addressId = result.recordset[0].address_id;
 
@@ -483,31 +620,40 @@ app.put('/update-address', async (req, res) => {
 
 
 //Update Nominee
-app.put('/update-address', async (req, res) => {
-  const { address } = req.body;
-
-  if (!address) {
-    return res.status(400).json({ error: 'Address is required' });
-  }
-
+app.put('/update-nominee', async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfig);
+    const username = checkingSession;
+    const nomineeName = req.body.nominee;
 
-    const getUserIdQuery = `SELECT address_id FROM user_details WHERE username = '${req.session.username}'`;
-    const result = await pool.request().query(getUserIdQuery);
-    const addressId = result.recordset[0].address_id;
+    if (!nomineeName) {
+      return res.status(400).json({ error: 'Nominee name is required' });
+    }
 
-    const updateQuery = `UPDATE address_details SET home_address = '${address}' WHERE address_id = ${addressId}`;
-    await pool.request().query(updateQuery);
+    const connection = new sql.ConnectionPool(dbConfig);
 
-    sql.close();
+    // Connect to the database
+    await connection.connect();
 
-    return res.send('Address updated successfully');
+    const getNomineeIdQuery = `SELECT nominee_id FROM user_details WHERE username = '${username}'`;
+    const nomineeIdResult = await connection.query(getNomineeIdQuery);
+    const nomineeId = nomineeIdResult.recordset[0]?.nominee_id;
+
+    if (!nomineeId) {
+      return res.status(404).json({ error: 'Nominee not found' });
+    }
+
+    const updateQuery = `UPDATE Nominee_Detail SET nominee_name = '${nomineeName}' WHERE nominee_id = ${nomineeId}`;
+    await connection.query(updateQuery);
+
+    connection.close();
+
+    res.json({ message: 'Nominee name updated successfully' });
   } catch (err) {
-    console.log(err);
-    return res.status(500).json({ error: 'Database error' });
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
   }
 });
+
 
 
 //Premium page
@@ -583,77 +729,6 @@ app.get('/premium-profile', async (req, res) => {
     return res.status(500).json({ error: 'Database error' });
   }
 });
-
-
-//Paying premium
-app.put('/process-payment', async (req, res) => {
-  try {
-    const getUserIdQuery = `SELECT user_id, premium_amount FROM user_details WHERE username = '${req.session.username}'`;
-
-    const pool = await sql.connect(dbConfig);
-
-    const result = await pool.request().query(getUserIdQuery);
-    const { user_id, premium_amount } = result.recordset[0];
-
-    let policy_no;
-
-    for (let i = 1; i <= 3; i++) {
-      if (i === 2) {
-        const getPolicyNoQuery = `SELECT policy_no FROM user_policies WHERE user_id = ${user_id}`;
-        const policyResult = await pool.request().query(getPolicyNoQuery);
-        policy_no = policyResult.recordset[0].policy_no;
-      }
-      if (i === 3) {
-        const paymentQuery = `EXEC Payments ${user_id}, ${policy_no}, ${premium_amount}`;
-        await pool.request().query(paymentQuery);
-      }
-    }
-
-    sql.close();
-
-    return res.redirect('Policy Detail.aspx');
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({ error: 'Database error' });
-  }
-});
-
-//Claiming policy
-app.put('/claim-policy', async (req, res) => {
-  try {
-    const uidQuery = `SELECT user_id FROM user_details WHERE username = '${req.session.username}'`;
-    const nomidQuery = `SELECT nominee_id FROM user_details WHERE username = '${req.session.username}'`;
-    const sumAssuredQuery = `SELECT Sum_Assured FROM user_details WHERE username = '${req.session.username}'`;
-    const payQuery = `SELECT SUM(policy_payments.amount) FROM policy_payments INNER JOIN user_details ON policy_payments.user_id = user_details.user_id WHERE policy_payments.user_id = (SELECT user_id FROM user_details WHERE username = '${req.session.username}')`;
-
-    const pool = await sql.connect(dbConfig);
-
-    const uidResult = await pool.request().query(uidQuery);
-    const uid = uidResult.recordset[0].user_id;
-
-    const nomidResult = await pool.request().query(nomidQuery);
-    const nomid = nomidResult.recordset[0].nominee_id;
-
-    const sumAssuredResult = await pool.request().query(sumAssuredQuery);
-    const pre_amount = sumAssuredResult.recordset[0].Sum_Assured;
-
-    const payResult = await pool.request().query(payQuery);
-    const _pay = payResult.recordset[0][''];
-
-    const claimQuery = `EXEC Claiming_Policy ${uid}, ${nomid}, '${req.session.username}', ${_pay}`;
-    const updateQuery = `UPDATE user_policies SET policy_status = 'Claimed' WHERE user_id = ${uid}`;
-
-    await pool.request().query(updateQuery);
-    await pool.request().query(claimQuery);
-
-    sql.close();
-    return res.send('Policy claimed successfully');
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({ error: 'Database error' });
-  }
-});
-
 
 //Inactive user policy status detail
 app.get('/user-policy-status-details', async (req, res) => {
@@ -806,7 +881,7 @@ app.get('/check-session', (req, res) => {
   console.log("Session: "+checkingSession);
   console.log("Session Object: "+JSON.stringify(req.session));
 
-  if (req.session) {
+  if (checkingSession) {
     res.json({ sessionValid: true});
   } else {
     res.json({ sessionValid: false });
