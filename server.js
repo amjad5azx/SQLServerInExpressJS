@@ -28,27 +28,27 @@ let checkingSession=''
 
 
 
-// Database configuration
-// const dbConfig = {
-//   user: 'Amjad',
-//   password: 'Amjad@123',
-//   server: 'mssql-130004-0.cloudclusters.net',
-//   port:19856,
-//   database: 'Insurance',
-//   options: {
-//     trustServerCertificate: true
-//   }
-// };
-
+//Database configuration
 const dbConfig = {
-    user: 'sa',
-    password: 'amjad',
-    server: 'DESKTOP-27TFO05',
-    database: 'Insurance',
-    options: {
-      trustServerCertificate: true
-    }
-  };
+  user: 'Amjad',
+  password: 'Amjad@123',
+  server: 'mssql-132079-0.cloudclusters.net',
+  port:12097,
+  database: 'Insurance',
+  options: {
+    trustServerCertificate: true
+  }
+};
+
+// const dbConfig = {
+//     user: 'sa',
+//     password: 'amjad',
+//     server: 'DESKTOP-27TFO05',
+//     database: 'Insurance',
+//     options: {
+//       trustServerCertificate: true
+//     }
+//   };
 
 // For Practice only
 app.get('/users', (req, res) => {
@@ -371,7 +371,7 @@ app.get('/user-policy', async (req, res) => {
       sumAssuredAmount: sumAssuredAmount || 'Wait for policy Approval',
       payments,
       policyStatus,
-      showButton1: premiumAmount !== ''&&payments!=sumAssuredAmount,
+      showButton1: premiumAmount !== ''&&payments<sumAssuredAmount,
       showButton2: sumAssuredAmount === payments&&policyStatus==='Active',
       showLabel3: policyStatus==='Claimed',
     };
